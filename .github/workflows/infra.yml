@@ -1,0 +1,62 @@
+name: infra
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write # Azure OIDC: no client secret is stored anywhere
+
+env:
+  RESOURCE_GROUP: rg-damiecodes-prod
+  LOCATION: westeurope
+
+jobs:
+  validate:
+    name: Build and what-if
+    runs-on: ubuntu-latest
+    environment: ${{ github.event_name == 'pull_request' && 'plan' || 'production' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Compile Bicep
+        run: az bicep build --file main.bicep --stdout > /dev/null
+      - uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      - name: What-if
+        run: |
+          {
+            echo '```'
+            az deployment group what-if \
+              --resource-group "$RESOURCE_GROUP" \
+              --template-file main.bicep \
+              --result-format FullResourcePayloads
+            echo '```'
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+
+  deploy:
+    name: Deploy
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    needs: validate
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      - name: Deploy
+        run: |
+          az deployment group create \
+            --resource-group "$RESOURCE_GROUP" \
+            --template-file main.bicep \
+            --name "main-${{ github.run_number }}" \
+            --output table

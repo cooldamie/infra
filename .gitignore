@@ -1,0 +1,4 @@
+*.json.tmp
+what-if.json
+main.json
+.DS_Store
