@@ -3,8 +3,9 @@
 targetScope = 'resourceGroup'
 
 @description('Region for the Static Web App resource. Content is served from a global edge regardless.')
-@allowed(['westeurope', 'eastus2', 'centralus', 'westus2', 'eastasia'])
-param location string = 'westeurope'
+@allowed(['eastus2', 'centralus', 'westus2', 'eastasia', 'westeurope'])
+// westeurope refused new Static Web Apps for this subscription in November 2026.
+param location string = 'eastus2'
 
 @description('Name of the portfolio Static Web App.')
 param siteName string = 'damiecodes-portfolio'
