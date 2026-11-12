@@ -50,17 +50,21 @@ dig +short NS damiecodes.com
 
 Replace `<github-user>` with your personal GitHub username.
 
+GitHub now includes the account and repository IDs in the identity it presents to Azure, for example `repo:cooldamie@67523753/infra@1453088117:environment:production`. The trust records must match that exact string, so the script looks both IDs up first.
+
 ```bash
 APP_ID=$(az ad app create --display-name gh-damiecodes-infra --query appId --output tsv)
-az ad sp create --id "$APP_ID" --output none
+SP_OID=$(az ad sp create --id "$APP_ID" --query id --output tsv)
 SUB_ID=$(az account show --query id --output tsv)
-az role assignment create --assignee "$APP_ID" --role Contributor \
-  --scope "/subscriptions/$SUB_ID/resourceGroups/rg-damiecodes-prod" --output none
+az role assignment create --assignee-object-id "$SP_OID" --assignee-principal-type ServicePrincipal \
+  --role Contributor --scope "/subscriptions/$SUB_ID/resourceGroups/rg-damiecodes-prod" --output none
+OWNER_ID=$(gh api users/<github-user> --jq .id)
+REPO_ID=$(gh api repos/<github-user>/infra --jq .id)
 for ENV in plan production; do
   az ad app federated-credential create --id "$APP_ID" --parameters "{
     \"name\": \"github-infra-$ENV\",
     \"issuer\": \"https://token.actions.githubusercontent.com\",
-    \"subject\": \"repo:<github-user>/infra:environment:$ENV\",
+    \"subject\": \"repo:<github-user>@$OWNER_ID/infra@$REPO_ID:environment:$ENV\",
     \"audiences\": [\"api://AzureADTokenExchange\"]
   }"
 done
